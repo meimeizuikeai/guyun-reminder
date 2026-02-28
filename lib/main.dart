@@ -2,11 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vibration/vibration.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 // ========== 配置区域（老板你可以在这里修改）==========
 class Config {
@@ -53,7 +50,6 @@ class GuYunApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
-        fontFamily: 'SourceHanSans',
       ),
       home: const MainScreen(),
     );
@@ -77,18 +73,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    _initPermissions();
     _startTimer();
-  }
-
-  Future<void> _initPermissions() async {
-    // 申请通知权限
-    await Permission.notification.request();
-
-    // 申请悬浮窗权限（安卓）
-    if (await FlutterOverlayWindow.isPermissionGranted() == false) {
-      await FlutterOverlayWindow.requestPermission();
-    }
   }
 
   void _startTimer() {
@@ -121,11 +106,6 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _showReminder() async {
     _updateDialogue();
 
-    // 震动
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(duration: 1000);
-    }
-
     // 显示通知
     const androidDetails = AndroidNotificationDetails(
       'guyun_reminder_channel',
@@ -144,9 +124,6 @@ class _MainScreenState extends State<MainScreen> {
       _currentDialogue,
       notificationDetails,
     );
-
-    // 显示悬浮窗
-    _showOverlayWindow();
 
     // 显示全屏弹窗
     if (mounted) {
@@ -169,21 +146,6 @@ class _MainScreenState extends State<MainScreen> {
           _resetTimer();
         }
       });
-    }
-  }
-
-  Future<void> _showOverlayWindow() async {
-    try {
-      await FlutterOverlayWindow.showOverlay(
-        height: 400,
-        width: WindowSize.matchParent,
-        alignment: OverlayAlignment.center,
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
-      );
-    } catch (e) {
-      print('悬浮窗显示失败: $e');
     }
   }
 
@@ -341,7 +303,7 @@ class _MainScreenState extends State<MainScreen> {
 
             // 底部提示
             Text(
-              '请授予悬浮窗权限以确保提醒能弹出',
+              '请授予通知权限以确保提醒能弹出',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.red[300],
