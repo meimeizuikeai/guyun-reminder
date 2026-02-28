@@ -1,0 +1,38 @@
+name: guyun_reminder
+description: 顾昀健康提醒 - 定时提醒休息、喝水、活动
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  # 悬浮窗权限
+  permission_handler: ^11.0.1
+  # 本地通知
+  flutter_local_notifications: ^16.1.0
+  # 后台任务
+  workmanager: ^0.5.2
+  # 震动
+  vibration: ^1.8.4
+  # 共享偏好设置
+  shared_preferences: ^2.2.2
+  # 悬浮窗（安卓）
+  flutter_overlay_window: ^0.4.4
+  # 保持屏幕常亮
+  wakelock_plus: ^1.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/guyun.png
