@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 // ========== 配置区域（老板你可以在这里修改）==========
 class Config {
@@ -26,16 +24,8 @@ class Config {
   static const int POPUP_DURATION = 10;
 }
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 初始化通知
-  final notifications = FlutterLocalNotificationsPlugin();
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosSettings = DarwinInitializationSettings();
-  const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-  await notifications.initialize(initSettings);
-
   runApp(const GuYunApp());
 }
 
@@ -68,7 +58,6 @@ class _MainScreenState extends State<MainScreen> {
   Timer? _timer;
   bool _isRunning = false;
   String _currentDialogue = "我在这里盯着你呢。";
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
@@ -105,25 +94,6 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _showReminder() async {
     _updateDialogue();
-
-    // 显示通知
-    const androidDetails = AndroidNotificationDetails(
-      'guyun_reminder_channel',
-      '顾昀健康提醒',
-      channelDescription: '定时提醒休息、喝水、活动',
-      importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.alarm,
-    );
-    const notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      0,
-      '顾昀健康提醒',
-      _currentDialogue,
-      notificationDetails,
-    );
 
     // 显示全屏弹窗
     if (mounted) {
@@ -303,7 +273,7 @@ class _MainScreenState extends State<MainScreen> {
 
             // 底部提示
             Text(
-              '请授予通知权限以确保提醒能弹出',
+              '请保持应用在后台运行以确保提醒正常',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.red[300],
