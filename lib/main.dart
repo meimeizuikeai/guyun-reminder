@@ -2,6 +2,11 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:vibration/vibration.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 // ========== 配置区域（老板你可以在这里修改）==========
 class Config {
@@ -24,8 +29,19 @@ class Config {
   static const int POPUP_DURATION = 10;
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 保持屏幕常亮
+  await WakelockPlus.enable();
+
+  // 初始化通知
+  final notifications = FlutterLocalNotificationsPlugin();
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const iosSettings = DarwinInitializationSettings();
+  const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+  await notifications.initialize(initSettings);
+
   runApp(const GuYunApp());
 }
 
@@ -58,11 +74,32 @@ class _MainScreenState extends State<MainScreen> {
   Timer? _timer;
   bool _isRunning = false;
   String _currentDialogue = "我在这里盯着你呢。";
+  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  bool _hasOverlayPermission = false;
 
   @override
   void initState() {
     super.initState();
+    _checkPermissions();
     _startTimer();
+  }
+
+  Future<void> _checkPermissions() async {
+    // 检查通知权限
+    final notificationStatus = await Permission.notification.status;
+    if (notificationStatus.isDenied) {
+      await Permission.notification.request();
+    }
+
+    // 检查悬浮窗权限
+    final overlayStatus = await FlutterOverlayWindow.isPermissionGranted();
+    if (!overlayStatus) {
+      await FlutterOverlayWindow.requestPermission();
+    }
+
+    setState(() {
+      _hasOverlayPermission = overlayStatus;
+    });
   }
 
   void _startTimer() {
@@ -95,6 +132,46 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _showReminder() async {
     _updateDialogue();
 
+    // 震动提醒
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(pattern: [0, 500, 200, 500]);
+    }
+
+    // 显示系统通知
+    const androidDetails = AndroidNotificationDetails(
+      'guyun_reminder_channel',
+      '顾昀健康提醒',
+      channelDescription: '定时提醒休息、喝水、活动',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+    );
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notifications.show(
+      0,
+      '顾昀健康提醒',
+      _currentDialogue,
+      notificationDetails,
+    );
+
+    // 尝试显示悬浮窗
+    try {
+      await FlutterOverlayWindow.showOverlay(
+        height: 400,
+        width: WindowSize.matchParent,
+        alignment: OverlayAlignment.center,
+        flag: OverlayFlag.defaultFlag,
+        overlayTitle: '顾昀健康提醒',
+        overlayContent: _currentDialogue,
+        enableDrag: true,
+        positionGravity: PositionGravity.auto,
+      );
+    } catch (e) {
+      debugPrint('悬浮窗显示失败: $e');
+    }
+
     // 显示全屏弹窗
     if (mounted) {
       showDialog(
@@ -102,7 +179,13 @@ class _MainScreenState extends State<MainScreen> {
         barrierDismissible: false,
         builder: (context) => ReminderDialog(
           dialogue: _currentDialogue,
-          onConfirm: () {
+          onConfirm: () async {
+            // 关闭悬浮窗
+            try {
+              await FlutterOverlayWindow.closeOverlay();
+            } catch (e) {
+              debugPrint('关闭悬浮窗失败: $e');
+            }
             Navigator.of(context).pop();
             _resetTimer();
           },
@@ -110,8 +193,14 @@ class _MainScreenState extends State<MainScreen> {
       );
 
       // 自动关闭
-      Future.delayed(const Duration(seconds: Config.POPUP_DURATION), () {
+      Future.delayed(const Duration(seconds: Config.POPUP_DURATION), () async {
         if (mounted && Navigator.of(context).canPop()) {
+          // 关闭悬浮窗
+          try {
+            await FlutterOverlayWindow.closeOverlay();
+          } catch (e) {
+            debugPrint('关闭悬浮窗失败: $e');
+          }
           Navigator.of(context).pop();
           _resetTimer();
         }
@@ -229,6 +318,17 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
 
+            const SizedBox(height: 5),
+
+            // 权限状态
+            Text(
+              _hasOverlayPermission ? '悬浮窗权限: 已授权' : '悬浮窗权限: 未授权',
+              style: TextStyle(
+                fontSize: 12,
+                color: _hasOverlayPermission ? Colors.green : Colors.orange,
+              ),
+            ),
+
             const SizedBox(height: 20),
 
             // 按钮区域
@@ -273,7 +373,7 @@ class _MainScreenState extends State<MainScreen> {
 
             // 底部提示
             Text(
-              '请保持应用在后台运行以确保提醒正常',
+              '请授予通知和悬浮窗权限以确保提醒能强制弹出',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.red[300],

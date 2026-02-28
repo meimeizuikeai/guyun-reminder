@@ -12,6 +12,16 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
+  # 本地通知 - 使用兼容版本
+  flutter_local_notifications: ^17.2.1
+  # 悬浮窗
+  flutter_overlay_window: ^0.4.5
+  # 权限管理
+  permission_handler: ^11.3.1
+  # 震动
+  vibration: ^1.9.0
+  # 保持屏幕常亮
+  wakelock_plus: ^1.2.8
 
 dev_dependencies:
   flutter_test:
