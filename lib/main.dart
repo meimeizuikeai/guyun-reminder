@@ -7,63 +7,97 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vibration/vibration.dart';
 
-// ========== 配置区域（老板你可以在这里修改）==========
 class Config {
-  // 提醒间隔时间（分钟）- 默认45分钟
   static const int REMINDER_INTERVAL_MINUTES = 45;
-
-  // 顾昀台词列表 - 你可以随意添加、修改
   static const List<String> DIALOGUES = [
     "又看手机？眼睛还要不要了？",
     "站起来，活动一下筋骨。",
-    "去给我打杯水喝。",
-    "盯着屏幕多久了？自己数数。",
-    "脖子僵了吧？转两圈。",
-    "休息五分钟，不会耽误你大事。",
-    "眼睛酸了才想起来我？晚了。",
-    "起来走走，别让我说第二遍。",
   ];
-
-  // 弹窗停留时间（秒）- 默认10秒
   static const int POPUP_DURATION = 10;
+}
+
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const OverlayApp());
+}
+
+class OverlayApp extends StatelessWidget {
+  const OverlayApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayScreen());
+  }
+}
+
+class OverlayScreen extends StatefulWidget {
+  const OverlayScreen({super.key});
+  @override
+  State<OverlayScreen> createState() => _OverlayScreenState();
+}
+
+class _OverlayScreenState extends State<OverlayScreen> {
+  String _message = "该喝水了！";
+  @override
+  void initState() {
+    super.initState();
+    FlutterOverlayWindow.overlayListener.listen((data) {
+      if (data != null && mounted) setState(() => _message = data.toString());
+    });
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A237E).withOpacity(0.92),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, spreadRadius: 2)],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('顾昀健康提醒', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w400)),
+            const SizedBox(height: 12),
+            Text(_message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, height: 1.4)),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF1A237E), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(vertical: 12)),
+                onPressed: () async => await FlutterOverlayWindow.closeOverlay(),
+                child: const Text('知道了，关闭', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 初始化通知
   final notifications = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
-  const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-  await notifications.initialize(initSettings);
-
-  // 保持屏幕常亮 - 使用原生方式
+  await notifications.initialize(const InitializationSettings(android: androidSettings, iOS: iosSettings));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
   runApp(const GuYunApp());
 }
 
 class GuYunApp extends StatelessWidget {
   const GuYunApp({super.key});
-
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '顾昀健康提醒',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const MainScreen(),
-    );
+    return const MaterialApp(title: '顾昀健康提醒', home: MainScreen());
   }
 }
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -83,28 +117,24 @@ class _MainScreenState extends State<MainScreen> {
     _startTimer();
   }
 
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _checkPermissions() async {
-    // 检查通知权限
-    final notificationStatus = await Permission.notification.status;
-    if (notificationStatus.isDenied) {
-      await Permission.notification.request();
-    }
-
-    // 检查悬浮窗权限
+    if ((await Permission.notification.status).isDenied) await Permission.notification.request();
     final overlayStatus = await FlutterOverlayWindow.isPermissionGranted();
-    if (!overlayStatus) {
-      await FlutterOverlayWindow.requestPermission();
-    }
-
-    setState(() {
-      _hasOverlayPermission = overlayStatus;
-    });
+    if (!overlayStatus) await FlutterOverlayWindow.requestPermission();
+    if (mounted) setState(() => _hasOverlayPermission = overlayStatus);
   }
 
   void _startTimer() {
     _timer?.cancel();
     _isRunning = true;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
       setState(() {
         _remainingSeconds--;
         if (_remainingSeconds <= 0) {
@@ -115,338 +145,56 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  void _resetTimer() {
-    setState(() {
-      _remainingSeconds = Config.REMINDER_INTERVAL_MINUTES * 60;
-    });
-  }
+  void _resetTimer() => setState(() => _remainingSeconds = Config.REMINDER_INTERVAL_MINUTES * 60);
 
   void _updateDialogue() {
-    final random = Random();
-    setState(() {
-      _currentDialogue = Config.DIALOGUES[random.nextInt(Config.DIALOGUES.length)];
-    });
+    setState(() => _currentDialogue = Config.DIALOGUES[Random().nextInt(Config.DIALOGUES.length)]);
   }
 
   Future<void> _showReminder() async {
     _updateDialogue();
+    if (await Vibration.hasVibrator() ?? false) Vibration.vibrate(pattern: [0, 500, 200, 500]);
 
-    // 震动提醒
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(pattern: [0, 500, 200, 500]);
-    }
-
-    // 显示系统通知
-    const androidDetails = AndroidNotificationDetails(
-      'guyun_reminder_channel',
-      '顾昀健康提醒',
-      channelDescription: '定时提醒休息、喝水、活动',
-      importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.alarm,
-    );
-    const notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      0,
-      '顾昀健康提醒',
-      _currentDialogue,
-      notificationDetails,
-    );
-
-    // 尝试显示悬浮窗
+    const androidDetails = AndroidNotificationDetails('guyun_reminder_channel', '顾昀健康提醒', importance: Importance.max, priority: Priority.high, fullScreenIntent: true);
+    await _notifications.show(0, '顾昀健康提醒', _currentDialogue, const NotificationDetails(android: androidDetails));
     try {
-      await FlutterOverlayWindow.showOverlay(
-        height: 400,
-        width: WindowSize.matchParent,
-        alignment: OverlayAlignment.center,
-        flag: OverlayFlag.defaultFlag,
-        overlayTitle: '顾昀健康提醒',
-        overlayContent: _currentDialogue,
-        enableDrag: true,
-        positionGravity: PositionGravity.auto,
-      );
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.shareData(_currentDialogue);
+      } else {
+        await FlutterOverlayWindow.showOverlay(height: 300, width: WindowSize.matchParent, alignment: OverlayAlignment.center, flag: OverlayFlag.defaultFlag, overlayTitle: '顾昀', overlayContent: _currentDialogue, enableDrag: true);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await FlutterOverlayWindow.shareData(_currentDialogue);
+      }
     } catch (e) {
-      debugPrint('悬浮窗显示失败: $e');
-    }
-
-    // 显示全屏弹窗
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => ReminderDialog(
-          dialogue: _currentDialogue,
-          onConfirm: () async {
-            // 关闭悬浮窗
-            try {
-              await FlutterOverlayWindow.closeOverlay();
-            } catch (e) {
-              debugPrint('关闭悬浮窗失败: $e');
-            }
-            Navigator.of(context).pop();
-            _resetTimer();
-          },
-        ),
-      );
-
-      // 自动关闭
-      Future.delayed(const Duration(seconds: Config.POPUP_DURATION), () async {
-        if (mounted && Navigator.of(context).canPop()) {
-          // 关闭悬浮窗
-          try {
-            await FlutterOverlayWindow.closeOverlay();
-          } catch (e) {
-            debugPrint('关闭悬浮窗失败: $e');
-          }
-          Navigator.of(context).pop();
-          _resetTimer();
-        }
-      });
+      debugPrint('悬浮窗报错: $e');
     }
   }
 
-  String _formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final secs = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  String _formatTime(int totalSeconds) => '${(totalSeconds ~/ 60).toString().padLeft(2, '0')}:${(totalSeconds % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+      body: Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 标题
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                '顾昀健康提醒',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
+            const Text('顾昀健康提醒', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(_currentDialogue, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+            const SizedBox(height: 40),
+            Text(_formatTime(_remainingSeconds), style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w200)),
+            const Text('距下次提醒'),
+            const SizedBox(height: 40),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(onPressed: _resetTimer, child: const Text('重置计时器')),
+                const SizedBox(width: 16),
+                ElevatedButton(onPressed: _showReminder, child: const Text('立即测试提醒')),
+              ],
             ),
-
-            // 人物和气泡区域
-            Expanded(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // 顾昀图片
-                  Positioned(
-                    left: 20,
-                    bottom: 20,
-                    child: Image.asset(
-                      'assets/images/guyun.png',
-                      width: 200,
-                      height: 300,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 200,
-                          height: 300,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.person, size: 100, color: Colors.grey[400]),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // 对话气泡
-                  Positioned(
-                    right: 20,
-                    top: 20,
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      constraints: const BoxConstraints(maxWidth: 250),
-                      child: Text(
-                        _currentDialogue,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[800],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 倒计时显示
-            Text(
-              '下次提醒: ${_formatTime(_remainingSeconds)}',
-              style: TextStyle(
-                fontSize: 24,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // 状态标签
-            Text(
-              _isRunning ? '状态: 运行中' : '状态: 已暂停',
-              style: TextStyle(
-                fontSize: 14,
-                color: _isRunning ? Colors.green : Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 5),
-
-            // 权限状态
-            Text(
-              _hasOverlayPermission ? '悬浮窗权限: 已授权' : '悬浮窗权限: 未授权',
-              style: TextStyle(
-                fontSize: 12,
-                color: _hasOverlayPermission ? Colors.green : Colors.orange,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 按钮区域
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _showReminder(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('测试提醒', style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _resetTimer,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('重置计时', style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // 底部提示
-            Text(
-              '请授予通知和悬浮窗权限以确保提醒能强制弹出',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.red[300],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// 提醒弹窗组件
-class ReminderDialog extends StatelessWidget {
-  final String dialogue;
-  final VoidCallback onConfirm;
-
-  const ReminderDialog({
-    super.key,
-    required this.dialogue,
-    required this.onConfirm,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Container(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 顾昀图片
-            Image.asset(
-              'assets/images/guyun.png',
-              width: 150,
-              height: 150,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(Icons.person, size: 100, color: Colors.grey[400]);
-              },
-            ),
-
-            const SizedBox(height: 20),
-
-            // 提醒文字
-            Text(
-              dialogue,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: 30),
-
-            // 确认按钮
-            ElevatedButton(
-              onPressed: onConfirm,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('知道了，这就去', style: TextStyle(fontSize: 18)),
-            ),
+            if (!_hasOverlayPermission) const Padding(padding: EdgeInsets.only(top: 20), child: Text('⚠️ 悬浮窗权限未授予，弹窗功能不可用', style: TextStyle(color: Colors.orange))),
           ],
         ),
       ),
