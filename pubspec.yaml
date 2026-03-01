@@ -20,8 +20,6 @@ dependencies:
   permission_handler: ^11.3.1
   # 震动
   vibration: ^1.9.0
-  # 保持屏幕常亮
-  wakelock_plus: ^1.2.8
 
 dev_dependencies:
   flutter_test:

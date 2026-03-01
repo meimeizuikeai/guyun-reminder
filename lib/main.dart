@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vibration/vibration.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 // ========== 配置区域（老板你可以在这里修改）==========
 class Config {
@@ -32,15 +31,15 @@ class Config {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 保持屏幕常亮
-  await WakelockPlus.enable();
-
   // 初始化通知
   final notifications = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
   const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
   await notifications.initialize(initSettings);
+
+  // 保持屏幕常亮 - 使用原生方式
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const GuYunApp());
 }
